@@ -15,6 +15,7 @@ import AgendaPage from './pages/AgendaPage';
 import './App.css';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
+
 dayjs.locale('pt-br');
 
 function App() {

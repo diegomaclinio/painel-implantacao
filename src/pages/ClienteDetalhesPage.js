@@ -2,18 +2,18 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom';
 import { db, auth } from '../firebaseConfig';
-import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, Timestamp, addDoc, collection } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove, Timestamp } from 'firebase/firestore';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import DOMPurify from 'dompurify';
-import { Container, Paper, Typography, Box, Button, List, ListItem, ListItemText, Divider, CircularProgress, IconButton, Checkbox, LinearProgress, ListItemIcon, Grid, Dialog, DialogTitle, DialogContent, DialogActions, ListItemSecondaryAction, TextField, Select, MenuItem, FormControl, InputLabel, DialogContentText } from '@mui/material';
+import { Container, Paper, Typography, Box, Button, List, ListItem, ListItemText, Divider, CircularProgress, IconButton, Checkbox, LinearProgress, ListItemIcon, Grid, Dialog, DialogTitle, DialogContent, DialogActions, ListItemSecondaryAction, TextField, Tooltip } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
-import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import DoneIcon from '@mui/icons-material/Done';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs';
 
@@ -30,14 +30,14 @@ function ClienteDetalhesPage() {
   const [editedText, setEditedText] = useState('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
-  const [finalizacaoModalOpen, setFinalizacaoModalOpen] = useState(false);
-  const [finalizacaoData, setFinalizacaoData] = useState({ tipo: 'concluido', motivo: '' });
 
   const podeEditarPreImplantacao = perfilUsuario?.funcao === 'supervisor' || perfilUsuario?.funcao === 'primeiro_contato';
   const podeEditarImplantacao = perfilUsuario?.funcao === 'supervisor' || (perfilUsuario?.funcao === 'implantacao' && perfilUsuario?.uid === cliente?.idTecnicoImplantacao);
   const isReadOnlyGeral = perfilUsuario?.funcao === 'suporte';
   const podeEditarNome = perfilUsuario?.funcao === 'supervisor' || perfilUsuario?.funcao === 'primeiro_contato';
-  const podeSolicitarFinalizacao = perfilUsuario?.funcao === 'supervisor' || perfilUsuario?.funcao === 'implantacao';
+  const podeConcluir = perfilUsuario?.funcao === 'supervisor' || (perfilUsuario?.funcao === 'implantacao' && perfilUsuario?.uid === cliente?.idTecnicoImplantacao);
+
+  const allTasksCompleted = cliente?.etapasPreImplantacao?.every(e => e.concluida) && cliente?.etapasImplantacao?.every(e => e.concluida);
 
   useEffect(() => {
     const docRef = doc(db, 'clientes', clienteId);
@@ -55,7 +55,7 @@ function ClienteDetalhesPage() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [clienteId]);
+  }, [clienteId, podeEditarImplantacao]);
 
   const handleSaveName = async () => {
     if (editedName.trim() === '') return;
@@ -63,7 +63,9 @@ function ClienteDetalhesPage() {
     try {
       await updateDoc(clienteDocRef, { nomeCliente: editedName });
       setIsEditingName(false);
-    } catch (error) { console.error("Erro ao atualizar nome do cliente:", error); }
+    } catch (error) {
+      console.error("Erro ao atualizar nome do cliente:", error);
+    }
   };
 
   const handleOpenChecklist = (tipo) => {
@@ -139,31 +141,23 @@ function ClienteDetalhesPage() {
       await updateDoc(clienteDocRef, { [fieldName]: newValue ? Timestamp.fromDate(newValue.toDate()) : null });
     } catch (error) { console.error("Erro ao atualizar data: ", error); }
   };
-  
-  const handleSolicitarFinalizacao = async () => {
-    if (!finalizacaoData.motivo.trim()) {
-      alert('Por favor, adicione um motivo/justificativa.');
-      return;
-    }
-    try {
-      await addDoc(collection(db, 'solicitacoesFinalizacao'), {
-        clienteId: cliente.id,
-        clienteNome: cliente.nomeCliente,
-        solicitanteId: perfilUsuario.uid,
-        solicitanteNome: perfilUsuario.nome,
-        tipo: finalizacaoData.tipo,
-        motivo: finalizacaoData.motivo,
-        data: Timestamp.now(),
-        status: 'pendente'
-      });
-      alert('Solicitação de finalização enviada ao supervisor!');
-      setFinalizacaoModalOpen(false);
-    } catch (error) {
-      console.error("Erro ao enviar solicitação:", error);
-      alert('Erro ao enviar solicitação.');
+
+  const handleConcluirCliente = async () => {
+    if (window.confirm("Tem certeza que deseja marcar esta implantação como concluída? O cliente será movido para os arquivos.")) {
+      const clienteDocRef = doc(db, 'clientes', clienteId);
+      try {
+        await updateDoc(clienteDocRef, {
+          statusGeral: 'arquivado',
+          motivoArquivamento: 'concluido'
+        });
+        navigate('/');
+      } catch (error) {
+        console.error("Erro ao concluir cliente:", error);
+        alert("Ocorreu um erro ao concluir a implantação.");
+      }
     }
   };
-
+  
   if (loading) { return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}><CircularProgress /></Box>; }
   if (!cliente) { return <Typography>Cliente não encontrado.</Typography>; }
 
@@ -182,7 +176,7 @@ function ClienteDetalhesPage() {
             <>
               <Typography variant="h4" component="h1" sx={{ flexGrow: 1 }}>{cliente.nomeCliente}</Typography>
               {podeEditarNome && !isReadOnlyGeral && (
-                <IconButton onClick={() => { setIsEditingName(true); setEditedName(cliente.nomeCliente); }}><EditIcon /></IconButton>
+                <IconButton onClick={() => setIsEditingName(true)}><EditIcon /></IconButton>
               )}
             </>
           )}
@@ -196,13 +190,24 @@ function ClienteDetalhesPage() {
           <Grid item xs={12} sm={6}><DatePicker disabled={isReadOnlyGeral} format="DD/MM/YYYY" label="Próximo Contato" value={cliente.dataProxContato ? dayjs(cliente.dataProxContato.toDate()) : null} onChange={(newValue) => handleDateChange('dataProxContato', newValue)} sx={{ width: '100%' }} /></Grid>
           <Grid item xs={12} sm={6}><DatePicker disabled={isReadOnlyGeral} format="DD/MM/YYYY" label="Previsão de Implantação" value={cliente.dataPrevImplantacao ? dayjs(cliente.dataPrevImplantacao.toDate()) : null} onChange={(newValue) => handleDateChange('dataPrevImplantacao', newValue)} sx={{ width: '100%' }}/></Grid>
         </Grid>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, my: 3 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, my: 3, alignItems: 'center' }}>
           <Button variant="outlined" startIcon={<ChecklistIcon />} onClick={() => handleOpenChecklist('pre')}>Checklist Pré-Implantação</Button>
           <Button variant="outlined" startIcon={<ChecklistIcon />} onClick={() => handleOpenChecklist('implantacao')}>Checklist de Implantação</Button>
-          {podeSolicitarFinalizacao && cliente.statusGeral === 'ativo' && (
-            <Button variant="contained" color="error" startIcon={<ExitToAppIcon />} onClick={() => setFinalizacaoModalOpen(true)}>
-              Finalizar Processo
-            </Button>
+          
+          {podeConcluir && cliente.statusGeral === 'ativo' && (
+            <Tooltip title={!allTasksCompleted ? "Complete todas as tarefas do checklist para concluir" : ""}>
+              <span>
+                <Button 
+                  variant="contained" 
+                  color="success" 
+                  startIcon={<DoneIcon />}
+                  disabled={!allTasksCompleted}
+                  onClick={handleConcluirCliente}
+                >
+                  Concluir Implantação
+                </Button>
+              </span>
+            </Tooltip>
           )}
         </Box>
         <Divider sx={{ my: 3 }} />
@@ -234,6 +239,7 @@ function ClienteDetalhesPage() {
           <Button type="submit" variant="contained" sx={{ mt: 2 }} disabled={isReadOnlyGeral}>Adicionar Comentário</Button>
         </Box>
       </Paper>
+
       <Dialog open={checklistModal.open} onClose={() => setChecklistModal({ open: false, title: '', etapas: [] })} fullWidth maxWidth="sm">
         <DialogTitle>{checklistModal.title}</DialogTitle>
         <DialogContent>
@@ -256,25 +262,6 @@ function ClienteDetalhesPage() {
         <DialogActions>
           <Button onClick={() => setEditingComment(null)}>Cancelar</Button>
           <Button onClick={handleSalvarEdicao} variant="contained">Salvar Alterações</Button>
-        </DialogActions>
-      </Dialog>
-      <Dialog open={finalizacaoModalOpen} onClose={() => setFinalizacaoModalOpen(false)} fullWidth>
-        <DialogTitle>Solicitar Finalização de Cliente</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{mb: 2}}>Selecione o tipo e descreva o motivo para a finalização do processo com este cliente.</DialogContentText>
-          <FormControl fullWidth margin="normal">
-            <InputLabel>Tipo de Finalização</InputLabel>
-            <Select value={finalizacaoData.tipo} label="Tipo de Finalização" onChange={(e) => setFinalizacaoData({...finalizacaoData, tipo: e.target.value})}>
-              <MenuItem value="concluido">Concluído</MenuItem>
-              <MenuItem value="suspenso">Suspenso</MenuItem>
-              <MenuItem value="cancelado">Cancelado</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField fullWidth multiline rows={4} margin="normal" label="Motivo / Comentário Final" value={finalizacaoData.motivo} onChange={(e) => setFinalizacaoData({...finalizacaoData, motivo: e.target.value})} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFinalizacaoModalOpen(false)}>Cancelar</Button>
-          <Button onClick={handleSolicitarFinalizacao} variant="contained">Enviar Solicitação</Button>
         </DialogActions>
       </Dialog>
     </Container>

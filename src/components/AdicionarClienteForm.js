@@ -30,20 +30,16 @@ function AdicionarClienteForm({ setSnackbar, perfilUsuario, onClose }) {
         idTecnicoImplantacao: null,
         idTecnicoPrimeiroContato: perfilUsuario?.uid || null,
         etapaPrincipal: 'backlog',
-        statusGeral: 'ativo',
-        motivoArquivamento: null,
         etapasPreImplantacao: [
-          { nome: 'Contrato Assinado', concluida: false },
-          { nome: 'Pagamento da Taxa de Implantação', concluida: false },
-          { nome: 'Agendamento Inicial', concluida: false },
+          { nome: 'Contrato', concluida: false }, { nome: 'Pagamento', concluida: false }, { nome: 'Token+CSC', concluida: false },
+          { nome: 'Certificado Digital', concluida: false }, { nome: 'Conferido sobre conversão', concluida: false },
+          { nome: 'Cliente sem mais duvidas iniciais', concluida: false }, { nome: 'Encaminhado para o técnico resposavel', concluida: false },
         ],
         etapasImplantacao: [
-          { nome: 'Instalação do Software', concluida: false },
-          { nome: 'Treinamento Básico', concluida: false },
-          { nome: 'Importação de Dados', concluida: false },
-          { nome: 'Treinamento Avançado', concluida: false },
-          { nome: 'Go-Live (Início do Uso)', concluida: false },
-          { nome: 'Acompanhamento Pós-Implantação', concluida: false },
+          { nome: 'Treinamento de cadastros', concluida: false }, { nome: 'Treinamento de financeiro', concluida: false },
+          { nome: 'Treinamento de vendas', concluida: false }, { nome: 'Instalação dos sistemas', concluida: false },
+          { nome: 'Validação das informações do cliente', concluida: false }, { nome: 'Verificação das informações banco de dados', concluida: false },
+          { nome: 'Cliente sem duvidas pronto para implantação', concluida: false },
         ],
         dataProxContato: dataProxContato ? Timestamp.fromDate(dataProxContato.toDate()) : null,
         dataPrevImplantacao: dataPrevImplantacao ? Timestamp.fromDate(dataPrevImplantacao.toDate()) : null,
@@ -81,10 +77,10 @@ function AdicionarClienteForm({ setSnackbar, perfilUsuario, onClose }) {
           </FormControl>
         </Grid>
         <Grid item xs={12} sm={6}>
-          <DatePicker format="DD/MM/YYYY" label="Próximo Contato" value={dataProxContato} onChange={(newValue) => setDataProxContato(newValue)} sx={{ width: '💯%' }} />
+          <DatePicker format="DD/MM/YYYY" label="Próximo Contato" value={dataProxContato} onChange={(newValue) => setDataProxContato(newValue)} sx={{ width: '100%' }} />
         </Grid>
         <Grid item xs={12} sm={6}>
-          <DatePicker format="DD/MM/YYYY" label="Previsão de Implantação" value={dataPrevImplantacao} onChange={(newValue) => setDataPrevImplantacao(newValue)} sx={{ width: '💯%' }} />
+          <DatePicker format="DD/MM/YYYY" label="Previsão de Implantação" value={dataPrevImplantacao} onChange={(newValue) => setDataPrevImplantacao(newValue)} sx={{ width: '100%' }} />
         </Grid>
         <Grid item xs={12}>
           <Button type="submit" variant="contained" fullWidth size="large">Adicionar Cliente</Button>

@@ -35,6 +35,7 @@ function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const podeAdicionarCliente = perfilUsuario?.funcao === 'supervisor' || perfilUsuario?.funcao === 'primeiro_contato';
+  const podeAtribuirTecnico = perfilUsuario?.funcao === 'supervisor' || perfilUsuario?.funcao === 'primeiro_contato';
 
   const handleViewChange = (event, newViewMode) => { if (newViewMode !== null) { setViewMode(newViewMode); } };
   const handleExcluirClick = (id) => { setClienteParaExcluir(id); setDialogOpen(true); };
@@ -55,7 +56,7 @@ function DashboardPage() {
       setSnackbar({ open: true, message: 'Técnico atribuído com sucesso!', severity: 'success' });
     } catch (error) { setSnackbar({ open: true, message: 'Erro ao atribuir técnico.', severity: 'error' }); }
   };
-  
+
   const handleAlertarSupervisor = async () => {
     if (!motivoAlerta.trim()) return;
     try {
@@ -81,7 +82,7 @@ function DashboardPage() {
         if (docSnap.exists()) {
           const perfil = { ...docSnap.data(), uid: user.uid };
           setPerfilUsuario(perfil);
-          if (perfil.funcao === 'supervisor') {
+          if (perfil.funcao === 'supervisor' || perfil.funcao === 'primeiro_contato') {
             const tecnicosQuery = query(collection(db, "usuarios"), where("funcao", "==", "implantacao"));
             onSnapshot(tecnicosQuery, (snapshot) => setTecnicos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
           }
@@ -95,9 +96,10 @@ function DashboardPage() {
     if (!perfilUsuario) return;
     setLoading(true);
     let q;
-    // Lógica revertida para não usar 'statusGeral' por enquanto
     if (perfilUsuario.funcao === 'supervisor' || perfilUsuario.funcao === 'suporte') {
       q = query(collection(db, "clientes"));
+    } else if (perfilUsuario.funcao === 'primeiro_contato') {
+      q = query(collection(db, "clientes"), where("idTecnicoImplantacao", "==", null));
     } else {
       q = query(collection(db, "clientes"), where("idTecnicoImplantacao", "==", perfilUsuario.uid));
     }
@@ -105,7 +107,7 @@ function DashboardPage() {
       const clientesData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       setClientes(clientesData);
       setLoading(false);
-      
+
       const hoje = dayjs();
       const alertasEncontrados = [];
       const tarefasEncontradas = [];
@@ -133,9 +135,6 @@ function DashboardPage() {
         setAlertaDialogOpen(true);
         isInitialMount.current = false;
       }
-    }, (error) => {
-      console.error("Erro na busca de clientes: ", error);
-      setLoading(false);
     });
     return () => unsubscribeClientes();
   }, [perfilUsuario]);
@@ -150,16 +149,16 @@ function DashboardPage() {
       <Table stickyHeader>
         <TableHead>
           <TableRow>
-            <TableCell sx={{fontWeight: 'bold'}}>Cliente</TableCell>
-            <TableCell sx={{fontWeight: 'bold'}}>Responsável</TableCell>
-            <TableCell sx={{fontWeight: 'bold', minWidth: 150}}>Progresso</TableCell>
-            {perfilUsuario?.funcao === 'supervisor' && <TableCell sx={{fontWeight: 'bold', minWidth: 200}}>Técnico Responsável</TableCell>}
-            <TableCell align="right" sx={{fontWeight: 'bold'}}>Ações</TableCell>
+            <TableCell sx={{ fontWeight: 'bold' }}>Cliente</TableCell>
+            <TableCell sx={{ fontWeight: 'bold' }}>Responsável</TableCell>
+            <TableCell sx={{ fontWeight: 'bold', minWidth: 150 }}>Progresso</TableCell>
+            {podeAtribuirTecnico && <TableCell sx={{ fontWeight: 'bold', minWidth: 200 }}>Técnico Responsável</TableCell>}
+            <TableCell align="right" sx={{ fontWeight: 'bold' }}>Ações</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {loading ? (
-            <TableRow><TableCell colSpan={perfilUsuario?.funcao === 'supervisor' ? 5 : 4} align="center"><CircularProgress /></TableCell></TableRow>
+            <TableRow><TableCell colSpan={podeAtribuirTecnico ? 5 : 4} align="center"><CircularProgress /></TableCell></TableRow>
           ) : (
             filteredClientes.map((cliente) => {
               const totalEtapas = (cliente.etapasPreImplantacao?.length || 0) + (cliente.etapasImplantacao?.length || 0);
@@ -167,17 +166,17 @@ function DashboardPage() {
               const progresso = totalEtapas > 0 ? Math.round((concluidas / totalEtapas) * 100) : 0;
               return (
                 <TableRow key={cliente.id} hover>
-                  <TableCell component={Link} to={`/cliente/${cliente.id}`} sx={{textDecoration: 'none', color: 'inherit', fontWeight: '500', cursor: 'pointer'}}>{cliente.nomeCliente}</TableCell>
-                  <TableCell>{cliente.contatoNome || 'N/A'}<br/><Typography variant="caption">{cliente.contatoTelefone || ''}</Typography></TableCell>
+                  <TableCell component={Link} to={`/cliente/${cliente.id}`} sx={{ textDecoration: 'none', color: 'inherit', fontWeight: '500', cursor: 'pointer' }}>{cliente.nomeCliente}</TableCell>
+                  <TableCell>{cliente.contatoNome || 'N/A'}<br /><Typography variant="caption">{cliente.contatoTelefone || ''}</Typography></TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Box sx={{ width: '100%', mr: 1 }}><LinearProgress variant="determinate" value={progresso} /></Box>
                       <Box sx={{ minWidth: 35 }}><Typography variant="body2" color="text.secondary">{`${progresso}%`}</Typography></Box>
                     </Box>
                   </TableCell>
-                  {perfilUsuario?.funcao === 'supervisor' && (
+                  {podeAtribuirTecnico && (
                     <TableCell>
-                      <Select size="small" sx={{width: '100%'}} value={cliente.idTecnicoImplantacao || ''} onChange={(e) => handleAtribuirTecnico(cliente.id, e.target.value)} displayEmpty>
+                      <Select size="small" sx={{ width: '100%' }} value={cliente.idTecnicoImplantacao || ''} onChange={(e) => handleAtribuirTecnico(cliente.id, e.target.value)} displayEmpty>
                         <MenuItem value=""><em>Ninguém</em></MenuItem>
                         {tecnicos.map(t => <MenuItem key={t.id} value={t.id}>{t.nome}</MenuItem>)}
                       </Select>
@@ -192,7 +191,7 @@ function DashboardPage() {
                       </Tooltip>
                     )}
                     {perfilUsuario?.funcao === 'supervisor' && (
-                      <Tooltip title="Excluir (Permanente)">
+                      <Tooltip title="Mover para a Lixeira">
                         <IconButton size="small" onClick={() => handleExcluirClick(cliente.id)}><DeleteIcon /></IconButton>
                       </Tooltip>
                     )}
@@ -215,9 +214,9 @@ function DashboardPage() {
             <DialogContent><AdicionarClienteForm setSnackbar={setSnackbar} perfilUsuario={perfilUsuario} onClose={() => setFormDialogOpen(false)} /></DialogContent>
           </Dialog>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 2, flexWrap: 'wrap', gap: 2 }}>
-            <Typography variant="h5">Clientes</Typography>
+            <Typography variant="h5">Clientes Ativos</Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <TextField size="small" variant="outlined" placeholder="Buscar cliente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>), }}/>
+              <TextField size="small" variant="outlined" placeholder="Buscar cliente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} InputProps={{ startAdornment: (<InputAdornment position="start"><SearchIcon /></InputAdornment>), }} />
               <ToggleButtonGroup value={viewMode} exclusive onChange={handleViewChange} size="small">
                 <ToggleButton value="list" aria-label="visualização em lista"><ViewListIcon /></ToggleButton>
                 <ToggleButton value="kanban" aria-label="visualização kanban"><ViewKanbanIcon /></ToggleButton>
@@ -231,43 +230,69 @@ function DashboardPage() {
         <Grid container spacing={3}>
           <Grid item xs={12} lg={4}>
             <Paper sx={{ p: 2, mb: 3 }}>
-              <Typography variant="h6" gutterBottom><EventBusyIcon sx={{verticalAlign: 'bottom', mr:1}}/>Meus Alertas</Typography>
-              <Divider sx={{mb:1}}/>
+              <Typography variant="h6" gutterBottom><EventBusyIcon sx={{ verticalAlign: 'bottom', mr: 1 }} />Meus Alertas</Typography>
+              <Divider sx={{ mb: 1 }} />
               <List dense>
                 {alertas.length > 0 ? alertas.map((a, i) => (
-                  <ListItem key={i}><ListItemText primary={a.clienteNome} secondary={`${a.tipo} em ${a.diasRestantes} dia(s)`} /></ListItem>
-                )) : <Typography variant="body2" color="text.secondary">Nenhum prazo próximo.</Typography>}
-              </List>
-            </Paper>
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="h6" gutterBottom><PlaylistAddCheckIcon sx={{verticalAlign: 'bottom', mr:1}}/>Minhas Próximas Tarefas</Typography>
-               <Divider sx={{mb:1}}/>
-              <List dense>
-                {proximasTarefas.length > 0 ? proximasTarefas.map((t, i) => (
-                  <ListItem key={i} component={Link} to={`/cliente/${t.clienteId}`} button>
-                    <ListItemText primary={t.clienteNome} secondary={`Próxima etapa: ${t.nomeEtapa}`} />
+                  <ListItem key={i}>
+                    <ListItemText primary={a.clienteNome} secondary={`${a.tipo} em ${a.diasRestantes} dia(s)`} />
                   </ListItem>
-                )) : <Typography variant="body2" color="text.secondary">Nenhuma tarefa pendente.</Typography>}
+                )) : (
+                  <Typography variant="body2" color="text.secondary">Nenhum prazo próximo.</Typography>
+                )}
               </List>
             </Paper>
+
+            {perfilUsuario?.funcao !== 'suporte' && (
+              <Paper sx={{ p: 2 }}>
+                <Typography variant="h6" gutterBottom><PlaylistAddCheckIcon sx={{ verticalAlign: 'bottom', mr: 1 }} />Minhas Próximas Tarefas</Typography>
+                <Divider sx={{ mb: 1 }} />
+                <List dense>
+                  {proximasTarefas.length > 0 ? proximasTarefas.map((t, i) => (
+                    <ListItem key={i} component={Link} to={`/cliente/${t.clienteId}`} button>
+                      <ListItemText primary={t.clienteNome} secondary={`Próxima etapa: ${t.nomeEtapa}`} />
+                    </ListItem>
+                  )) : (
+                    <Typography variant="body2" color="text.secondary">Nenhuma tarefa pendente.</Typography>
+                  )}
+                </List>
+              </Paper>
+            )}
           </Grid>
+
           <Grid item xs={12} lg={8}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h5">Meus Clientes</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+              <Typography variant="h5">Meus Clientes</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <TextField
+                  size="small"
+                  variant="outlined"
+                  placeholder="Buscar cliente..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
                 <ToggleButtonGroup value={viewMode} exclusive onChange={handleViewChange} size="small">
                   <ToggleButton value="list" aria-label="visualização em lista"><ViewListIcon /></ToggleButton>
                   <ToggleButton value="kanban" aria-label="visualização kanban"><ViewKanbanIcon /></ToggleButton>
                 </ToggleButtonGroup>
               </Box>
-              {viewMode === 'list' ? renderTable() : (loading ? <CircularProgress /> : <KanbanBoard clientes={filteredClientes} />)}
+            </Box>
+            {viewMode === 'list' ? renderTable() : (loading ? <CircularProgress /> : <KanbanBoard clientes={filteredClientes} />)}
           </Grid>
         </Grid>
       )}
-      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({...snackbar, open: false})} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}><Alert onClose={() => setSnackbar({...snackbar, open: false})} severity={snackbar.severity} sx={{ width: '100%' }}>{snackbar.message}</Alert></Snackbar>
+      <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}><Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>{snackbar.message}</Alert></Snackbar>
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
-        <DialogTitle>Confirmar Exclusão</DialogTitle>
-        <DialogContent><DialogContentText>Tem certeza que deseja excluir este cliente? Esta ação é permanente.</DialogContentText></DialogContent>
-        <DialogActions><MuiButton onClick={() => setDialogOpen(false)}>Cancelar</MuiButton><MuiButton onClick={handleConfirmarExclusao} color="error">Excluir</MuiButton></DialogActions>
+        <DialogTitle>Mover cliente para a Lixeira?</DialogTitle>
+        <DialogContent><DialogContentText>Esta ação moverá o cliente para a lixeira. Ele poderá ser recuperado depois.</DialogContentText></DialogContent>
+        <DialogActions><MuiButton onClick={() => setDialogOpen(false)}>Cancelar</MuiButton><MuiButton onClick={handleConfirmarExclusao} color="error">Mover para Lixeira</MuiButton></DialogActions>
       </Dialog>
       <Dialog open={alertaDialogOpen} onClose={() => setAlertaDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Alertas de Prazos Próximos!</DialogTitle>
@@ -291,4 +316,5 @@ function DashboardPage() {
     </Container>
   );
 }
+
 export default DashboardPage;

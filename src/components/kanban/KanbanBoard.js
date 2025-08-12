@@ -6,15 +6,14 @@ import KanbanColumn from './KanbanColumn';
 import { db } from '../../firebaseConfig';
 import { doc, updateDoc } from 'firebase/firestore';
 
-// As colunas agora são definidas aqui, de forma fixa
+// --- AQUI ESTÁ A MUDANÇA COM OS NOVOS TÍTULOS ---
 const initialColumns = {
-  'backlog': { id: 'backlog', title: 'Backlog', clienteIds: [] },
-  'execucao': { id: 'execucao', title: 'Em Execução', clienteIds: [] },
-  'pendente': { id: 'pendente', title: 'Pendente', clienteIds: [] },
+  'backlog': { id: 'backlog', title: 'Inicio do Acompanhamento', clienteIds: [] },
+  'execucao': { id: 'execucao', title: 'Cliente em Tratativa', clienteIds: [] },
+  'pendente': { id: 'pendente', title: 'Implantado/Acompanhando', clienteIds: [] },
   'concluido': { id: 'concluido', title: 'Concluído', clienteIds: [] },
 };
 
-// A ordem das colunas também é fixa
 const columnOrder = ['backlog', 'execucao', 'pendente', 'concluido'];
 
 export default function KanbanBoard({ clientes }) {
@@ -28,7 +27,6 @@ export default function KanbanBoard({ clientes }) {
         if (newColumns[etapa]) {
           newColumns[etapa].clienteIds.push(cliente.id);
         } else {
-            // Se um cliente tem uma etapa que não existe mais, coloca no backlog
             newColumns['backlog'].clienteIds.push(cliente.id);
         }
       });
@@ -64,6 +62,7 @@ export default function KanbanBoard({ clientes }) {
       await updateDoc(clienteRef, { etapaPrincipal: destination.droppableId });
     } catch (error) {
       console.error("Erro ao atualizar etapa do cliente:", error);
+      // Reverte o estado em caso de erro no update
       setColumns(prev => ({...prev, [start.id]: start, [finish.id]: finish}));
     }
   };
